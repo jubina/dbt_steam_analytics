@@ -1,0 +1,80 @@
+version: 2
+
+seeds:
+  - name: raw_steam_library
+    description: "Raw Steam game library export. One row per game owned."
+    columns:
+      - name: app_id
+        description: "Steam application ID (unique per game)"
+      - name: game_title
+        description: "Full game title as listed on Steam"
+      - name: playtime_hours
+        description: "Total hours played across all sessions"
+
+models:
+  - name: stg_steam_games
+    description: >
+      Staged Steam library data. Casts types, standardizes strings,
+      and derives achievement completion percentage. One row per game.
+    columns:
+      - name: app_id
+        description: "Steam application ID"
+        tests:
+          - unique
+          - not_null
+      - name: game_title
+        tests:
+          - not_null
+      - name: playtime_hours
+        description: "Total hours played. Zero is valid (unplayed games)."
+        tests:
+          - not_null
+      - name: achievement_completion_pct
+        description: "Ratio of achievements earned to total available (0.0 to 1.0)"
+
+  - name: dim_games
+    description: >
+      Game dimension table with genre taxonomy, era classification,
+      price tier, and game attribute flags. One row per game.
+    columns:
+      - name: app_id
+        tests:
+          - unique
+          - not_null
+      - name: release_era
+        description: "Bucketed release period: Classic / Mid Era / Modern / Current"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Classic (pre-2010)', 'Mid Era (2010-2014)', 'Modern (2015-2019)', 'Current (2020+)']
+      - name: price_tier
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Free to Play', 'Budget', 'Mid-Range', 'Premium']
+
+  - name: fct_playtime
+    description: >
+      Core fact model. Playtime, value, and engagement metrics per game.
+      Answers: which games gave the best value per dollar? What's completion
+      rate by genre? Which genres dominate playtime? One row per game.
+    columns:
+      - name: app_id
+        tests:
+          - unique
+          - not_null
+      - name: engagement_tier
+        description: "Unplayed / Sampled / Played / Invested / Obsessed based on hours"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Unplayed', 'Sampled', 'Played', 'Invested', 'Obsessed']
+      - name: value_tier
+        description: "Free / Excellent / Good / Fair / Poor Value based on cost per hour"
+        tests:
+          - not_null
+      - name: cost_per_hour
+        description: "Purchase price divided by hours played. Null for unplayed games."
