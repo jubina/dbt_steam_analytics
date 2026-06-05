@@ -1,23 +1,23 @@
 version: 2
 
 seeds:
-  - name: raw_steam_library
-    description: "Raw Steam game library export. One row per game owned."
+  - name: raw_steam_platform
+    description: "Raw Steam platform data from Steam Spy API. Top 100 most-played games, refreshed weekly."
     columns:
-      - name: app_id
-        description: "Steam application ID (unique per game)"
-      - name: game_title
-        description: "Full game title as listed on Steam"
-      - name: playtime_hours
-        description: "Total hours played across all sessions"
+      - name: appid
+        description: "Steam application ID"
+      - name: name
+        description: "Game title"
+      - name: pulled_at
+        description: "Date this data was fetched from Steam Spy"
 
 models:
-  - name: stg_steam_games
+  - name: stg_steam_platform
     description: >
-      Staged Steam library data. Casts types, standardizes strings,
-      and derives achievement completion percentage. One row per game.
+      Staged Steam platform data. Casts types, standardizes strings,
+      derives cost_per_hour. One row per game.
     columns:
-      - name: app_id
+      - name: appid
         description: "Steam application ID"
         tests:
           - unique
@@ -25,56 +25,47 @@ models:
       - name: game_title
         tests:
           - not_null
-      - name: playtime_hours
-        description: "Total hours played. Zero is valid (unplayed games)."
+      - name: price_usd
+        description: "Purchase price in USD. 0.0 for free-to-play games."
         tests:
           - not_null
-      - name: achievement_completion_pct
-        description: "Ratio of achievements earned to total available (0.0 to 1.0)"
+      - name: review_score
+        description: "Ratio of positive to total reviews (0.0 to 1.0)"
 
-  - name: dim_games
+  - name: fct_steam_platform
     description: >
-      Game dimension table with genre taxonomy, era classification,
-      price tier, and game attribute flags. One row per game.
+      Core fact model. Platform reach, pricing, and review sentiment
+      for the top 100 most-played Steam games. Refreshed weekly via
+      GitHub Actions + Steam Spy API. One row per game.
     columns:
-      - name: app_id
+      - name: appid
         tests:
           - unique
           - not_null
-      - name: release_era
-        description: "Bucketed release period: Classic / Mid Era / Modern / Current"
-        tests:
-          - not_null
-          - accepted_values:
-              arguments:
-                values: ['Classic (pre-2010)', 'Mid Era (2010-2014)', 'Modern (2015-2019)', 'Current (2020+)']
       - name: price_tier
+        description: "Free to Play / Budget / Mid-Range / Premium / AAA"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['Free to Play', 'Budget', 'Mid-Range', 'Premium']
-
-  - name: fct_playtime
-    description: >
-      Core fact model. Playtime, value, and engagement metrics per game.
-      Answers: which games gave the best value per dollar? What's completion
-      rate by genre? Which genres dominate playtime? One row per game.
-    columns:
-      - name: app_id
-        tests:
-          - unique
-          - not_null
-      - name: engagement_tier
-        description: "Unplayed / Sampled / Played / Invested / Obsessed based on hours"
+                values: ['Free to Play', 'Budget (under $10)', 'Mid-Range ($10-$29)', 'Premium ($30-$59)', 'AAA ($60+)']
+      - name: reach_tier
+        description: "Ownership bucket: Mega / Huge / Large / Mid / Niche"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['Unplayed', 'Sampled', 'Played', 'Invested', 'Obsessed']
-      - name: value_tier
-        description: "Free / Excellent / Good / Fair / Poor Value based on cost per hour"
+                values: ['Mega (100M+)', 'Huge (35M+)', 'Large (15M+)', 'Mid (5M+)', 'Niche (<5M)']
+      - name: review_category
+        description: "Overwhelmingly Positive / Very Positive / Mostly Positive / Mixed / Mostly Negative"
         tests:
           - not_null
-      - name: cost_per_hour
-        description: "Purchase price divided by hours played. Null for unplayed games."
+          - accepted_values:
+              arguments:
+                values: ['Overwhelmingly Positive', 'Very Positive', 'Mostly Positive', 'Mixed', 'Mostly Negative']
+      - name: owners_estimate
+        description: "Midpoint of Steam Spy ownership range estimate"
+        tests:
+          - not_null
+      - name: review_score
+        description: "Ratio of positive to total reviews (0.0 to 1.0)"
